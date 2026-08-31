@@ -6,6 +6,12 @@ usage() {
   cat <<'EOF'
 Usage: bootstrap-backend.sh --bucket NAME --table NAME --region REGION
 
+Example:
+  ./scripts/bootstrap-backend.sh \
+    --bucket my-tf-state-bucket \
+    --table my-tf-locks \
+    --region eu-west-1
+
 Creates the S3 bucket and DynamoDB table used by the Terraform backend.
 EOF
 }
