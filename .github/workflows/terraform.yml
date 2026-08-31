@@ -1,0 +1,143 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - "**/*.tftest.hcl"
+      - "**/.terraform.lock.hcl"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+      confirm_apply:
+        description: Type apply to confirm an apply operation
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TERRAFORM_VERSION: "1.15.9"
+  WORKING_DIRECTORY: environments/dev
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize without backend
+        run: terraform init -backend=false
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Validate configuration
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Run Terraform tests
+        run: terraform test
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+  terraform:
+    name: Terraform ${{ inputs.operation }}
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-dev
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      TF_BACKEND_BUCKET: ${{ vars.TF_BACKEND_BUCKET }}
+      TF_BACKEND_KEY: ${{ vars.TF_BACKEND_KEY }}
+      TF_BACKEND_DYNAMODB_TABLE: ${{ vars.TF_BACKEND_DYNAMODB_TABLE }}
+    steps:
+      - name: Check apply confirmation
+        if: inputs.operation == 'apply'
+        env:
+          CONFIRM_APPLY: ${{ inputs.confirm_apply }}
+        run: |
+          if [ "$CONFIRM_APPLY" != "apply" ]; then
+            echo "Apply requires confirm_apply to be exactly: apply" >&2
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Validate workflow configuration
+        run: |
+          for name in AWS_REGION AWS_ROLE_ARN TF_BACKEND_BUCKET TF_BACKEND_KEY TF_BACKEND_DYNAMODB_TABLE; do
+            if [ -z "${!name}" ]; then
+              echo "Missing GitHub configuration: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: axis-terraform-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Write dev Terraform variables
+        env:
+          TFVARS_DEV: ${{ secrets.TFVARS_DEV }}
+        run: |
+          if [ -z "$TFVARS_DEV" ]; then
+            echo "Missing GitHub secret: TFVARS_DEV" >&2
+            exit 1
+          fi
+          printf '%s\n' "$TFVARS_DEV" > terraform.tfvars
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Initialize remote backend
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="key=$TF_BACKEND_KEY" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_BACKEND_DYNAMODB_TABLE" \
+            -backend-config="encrypt=true"
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Create saved plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Apply saved plan
+        if: inputs.operation == 'apply' && inputs.confirm_apply == 'apply'
+        run: terraform apply -no-color -auto-approve tfplan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
