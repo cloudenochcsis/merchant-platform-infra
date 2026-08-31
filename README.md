@@ -1,4 +1,4 @@
-# Axis AWS Terraform Baseline
+# Merchant Platform Infrastructure
 
 This repository defines a small production-oriented AWS baseline for a containerised web application. It is intentionally straightforward: local Terraform modules, two Availability Zones, private compute and database tiers, and no deployment automation hidden from the reviewer.
 
