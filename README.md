@@ -81,7 +81,9 @@ Review the saved plan before any controlled apply. The test uses mocked provider
 
 ## GitHub Actions Fallback
 
-`.github/workflows/terraform.yml` provides a deliberately manual fallback for the dev stack. Pull requests only run formatting, backend-free initialization, validation, and mocked Terraform tests. They never authenticate to AWS or provision resources.
+`.github/workflows/terraform.yml` provides a deliberately manual fallback for the dev stack. Pull requests only run formatting, backend-free initialization, validation, mocked Terraform tests, and a Checkov security scan. They never authenticate to AWS or provision resources.
+
+Checkov is pinned to a reviewed action version and scans all Terraform. Known findings for documented deferred controls and cross-module security-group attachment false positives remain visible but do not fail the workflow; any other failed policy blocks validation. The allowlist should shrink as those controls are implemented.
 
 Manual runs accept an operation of `plan` or `apply`. An apply also requires `confirm_apply` to be exactly `apply`. The workflow creates a saved plan and applies that exact file on the same ephemeral runner; it does not upload the potentially sensitive plan as an artifact.
 
@@ -160,7 +162,8 @@ An operational rollback pins `container_image` to the previously approved tag or
 - Alarm actions default to an empty list, so alarms are created but do not notify an operator until an SNS or incident-management destination is supplied.
 - ECS has a fixed desired count and no target-tracking autoscaling policy.
 - Database credentials remain in encrypted Terraform state and rotation is a reviewed manual operation.
-- ACM lifecycle, DNS, WAF, VPC endpoints, centralised log analysis, and automated deployment policy checks are outside this baseline.
+- ACM lifecycle, DNS, WAF, VPC endpoints, and centralised log analysis are outside this baseline.
+- Checkov provides static source analysis only. Its soft-fail allowlist covers documented deferred controls and cross-module false positives; it does not verify deployed AWS state or organisation-specific policy and should be reduced as controls are implemented.
 - The design is single-Region and has no implemented cross-Region backup or disaster-recovery path.
 - The remote-state resources and GitHub OIDC deployment role are external prerequisites whose configuration must be reviewed separately.
 - Terraform has been validated and tested with mocked providers, but no environment-specific plan or apply has verified quotas, permissions, certificate ownership, or service availability in a real AWS account.
