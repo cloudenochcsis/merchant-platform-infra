@@ -54,6 +54,17 @@ cp environments/dev/terraform.tfvars.example environments/dev/terraform.tfvars
 
 The root uses a partial S3 backend so account-specific state names are not committed. Create the encrypted S3 bucket and DynamoDB table once in a separate bootstrap process; do not add them to this stack because Terraform cannot safely store its state in infrastructure that does not exist yet. Configure the table with a string partition key named `LockID`, on-demand billing, point-in-time recovery, and encryption.
 
+With an authenticated AWS CLI, bootstrap both resources once. The bucket name must be globally unique:
+
+```bash
+./scripts/bootstrap-backend.sh \
+  --bucket REPLACE_STATE_BUCKET \
+  --table REPLACE_LOCK_TABLE \
+  --region eu-west-1
+```
+
+The script is safe to rerun: it creates missing resources, then enforces bucket versioning, SSE-S3 encryption, public-access blocking, DynamoDB encryption, and point-in-time recovery. It does not create state objects, IAM policies, or KMS keys.
+
 Initialize with environment-specific backend values:
 
 ```bash

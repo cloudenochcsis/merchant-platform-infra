@@ -5,6 +5,7 @@ on:
     paths:
       - "**/*.tf"
       - "**/*.tftest.hcl"
+      - "**/*.sh"
       - "**/.terraform.lock.hcl"
       - ".github/workflows/terraform.yml"
   workflow_dispatch:
@@ -58,6 +59,9 @@ jobs:
       - name: Run Terraform tests
         run: terraform test
         working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Test backend bootstrap script
+        run: bash tests/bootstrap_backend_test.sh
 
       - name: Scan Terraform with Checkov
         uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12.3122.0
