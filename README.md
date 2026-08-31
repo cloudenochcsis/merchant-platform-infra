@@ -41,6 +41,15 @@ Copy the example and replace its documentation-only image and certificate values
 cp environments/dev/terraform.tfvars.example environments/dev/terraform.tfvars
 ```
 
+## Assumptions
+
+- DNS and certificate lifecycle are managed outside this stack. A valid ACM certificate must already exist in the target Region and be supplied through `certificate_arn`. This stack does not manage ACM certificates or Route 53 hosted zones.
+- The application build and registry pipeline exists separately. A deployable container image must be available before `terraform apply`, preferably referenced by digest or by a registry-enforced immutable tag.
+- Only the dev environment is implemented. Additional environments may initially share an AWS account for this demo, but production environments should preferably use separate accounts, credentials, and Terraform state.
+- Initial traffic is low. The example sizing—`db.t4g.micro`, 0.25 vCPU and 512 MiB Fargate tasks, and `desired_count = 2`—is a starting point configured per environment, not an architectural limit.
+- The encrypted S3 state bucket and DynamoDB lock table are bootstrapped separately before this stack is initialized. Their environment-specific values are supplied through backend configuration.
+- Operators authenticate using appropriately scoped AWS credentials. Local credential provisioning is outside this stack; GitHub Actions uses the separately configured OIDC role described in the GitHub Actions Fallback section.
+
 ## Remote State
 
 The root uses a partial S3 backend so account-specific state names are not committed. Create the encrypted S3 bucket and DynamoDB table once in a separate bootstrap process; do not add them to this stack because Terraform cannot safely store its state in infrastructure that does not exist yet. Configure the table with a string partition key named `LockID`, on-demand billing, point-in-time recovery, and encryption.
