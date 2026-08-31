@@ -23,6 +23,10 @@ The ALB spans two public subnets. ECS tasks span two private application subnets
 - `ecs`: ALB/listeners/target group, ECS cluster, Fargate task and service, IAM roles, and retained CloudWatch log group.
 - `observability`: alarms for unhealthy ALB targets, ECS CPU, ECS memory, and low RDS free storage.
 
+## Why ECS Fargate
+
+ECS Fargate fits the initial small web workload without introducing an EC2 fleet or Kubernetes control plane to patch, scale, and operate. It retains native integration with ALB health checks, IAM roles, Secrets Manager, CloudWatch Logs, and rolling deployments while keeping the compute layer easy to review. The trade-off is less host-level control and potentially higher steady-state unit cost than a well-utilised EC2 fleet; those costs should be reconsidered when workload shape and scale are known.
+
 ## Prerequisites
 
 - Terraform `~> 1.15.0`.
@@ -119,6 +123,18 @@ The replacement updates the RDS password and secret version. The forced deployme
 
 One NAT Gateway is the deliberate cost-saving exception. Both application subnet route tables depend on the NAT in the first Availability Zone, making outbound application startup dependencies vulnerable to that AZ. A production environment should use one NAT Gateway per AZ with each private route table targeting its local gateway.
 
+## Availability Zone Failure and Recovery
+
+The ALB stops routing to unhealthy targets in a failed Availability Zone. ECS uses two private application subnets, a default desired count of two, and Availability Zone rebalancing; it can replace failed tasks in the surviving zone, subject to regional Fargate capacity and working outbound access.
+
+RDS provides automatic cross-AZ failover only when `db_multi_az` is enabled. The module defaults it to true, but the dev example disables it for cost, so dev can remain unavailable during a database AZ outage until AWS service recovery or a restore. Production should enable Multi-AZ and regularly test database restore procedures.
+
+The single NAT Gateway is the main shared AZ dependency: if its Availability Zone fails, existing healthy tasks may continue serving traffic and reaching RDS, but image pulls and calls to ECR, CloudWatch Logs, and Secrets Manager can fail. Production recovery requires one NAT Gateway per AZ with local routing, or carefully selected VPC endpoints that remove those NAT dependencies.
+
+## Cost Management
+
+Reduce cost first through measured right-sizing of Fargate CPU and memory, RDS instance and storage settings, backup retention, and log retention. Keep at least two production tasks so savings do not remove application AZ redundancy. After usage stabilises, evaluate Compute Savings Plans, RDS Reserved Instances, and ARM64-compatible application images. Compare NAT processing and cross-AZ charges with the fixed hourly cost of VPC endpoints; an S3 gateway endpoint is a low-cost first step, while interface endpoints should be added only where traffic and resilience justify them. Single-NAT and non-Multi-AZ settings are acceptable for dev, not production defaults.
+
 ## ECS Deployments and Rollback
 
 Changing the immutable image reference creates a new task-definition revision. ECS performs a rolling deployment with 100% minimum and 200% maximum healthy capacity. The ALB health check gates traffic; ECS ignores initial load-balancer failures during the grace period. The deployment circuit breaker automatically rolls back a deployment that cannot reach steady state.
@@ -128,5 +144,16 @@ An operational rollback pins `container_image` to the previously approved tag or
 ## Environments
 
 `environments/dev` is an explicit root composition. Create `environments/staging` and `environments/prod` with the same module calls, separate variable values, separate state keys, and preferably separate AWS accounts/assume-role targets. Do not share Terraform state across environments. Production values should retain deletion protection and Multi-AZ and normally increase task count, database sizing, backup retention, and log retention.
+
+## Remaining Risks
+
+- The dev values use one NAT Gateway and disable RDS Multi-AZ; neither choice provides full AZ resilience.
+- Alarm actions default to an empty list, so alarms are created but do not notify an operator until an SNS or incident-management destination is supplied.
+- ECS has a fixed desired count and no target-tracking autoscaling policy.
+- Database credentials remain in encrypted Terraform state and rotation is a reviewed manual operation.
+- ACM lifecycle, DNS, WAF, VPC endpoints, centralised log analysis, and automated deployment policy checks are outside this baseline.
+- The design is single-Region and has no implemented cross-Region backup or disaster-recovery path.
+- The remote-state resources and GitHub OIDC deployment role are external prerequisites whose configuration must be reviewed separately.
+- Terraform has been validated and tested with mocked providers, but no environment-specific plan or apply has verified quotas, permissions, certificate ownership, or service availability in a real AWS account.
 
 See [improvements.md](improvements.md) for intentionally deferred controls.
