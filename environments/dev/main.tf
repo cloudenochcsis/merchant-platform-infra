@@ -17,6 +17,7 @@ module "network" {
   public_subnet_cidrs      = var.public_subnet_cidrs
   private_app_subnet_cidrs = var.private_app_subnet_cidrs
   private_db_subnet_cidrs  = var.private_db_subnet_cidrs
+  nat_gateway_per_az       = var.nat_gateway_per_az
   common_tags              = local.common_tags
 }
 

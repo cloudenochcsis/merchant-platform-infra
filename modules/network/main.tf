@@ -22,6 +22,10 @@ locals {
     }
   }
 
+  nat_gateway_subnets = var.nat_gateway_per_az ? local.public_subnets : {
+    shared = local.public_subnets[var.availability_zones[0]]
+  }
+
   tags = merge(var.common_tags, { Component = "Network" })
 }
 
@@ -100,20 +104,24 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_eip" "nat" {
+  for_each = local.nat_gateway_subnets
+
   domain = "vpc"
 
   depends_on = [aws_internet_gateway.this]
 
-  tags = merge(local.tags, { Name = "${local.name}-nat-eip" })
+  tags = merge(local.tags, { Name = "${local.name}-nat-${each.value.index}-eip" })
 }
 
 resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[var.availability_zones[0]].id
+  for_each = local.nat_gateway_subnets
+
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[var.nat_gateway_per_az ? each.key : var.availability_zones[0]].id
 
   depends_on = [aws_internet_gateway.this]
 
-  tags = merge(local.tags, { Name = "${local.name}-nat" })
+  tags = merge(local.tags, { Name = "${local.name}-nat-${each.value.index}" })
 }
 
 resource "aws_route_table" "private_app" {
@@ -123,7 +131,7 @@ resource "aws_route_table" "private_app" {
 
   route {
     cidr_block     = var.internet_ipv4_cidr
-    nat_gateway_id = aws_nat_gateway.this.id
+    nat_gateway_id = aws_nat_gateway.this[var.nat_gateway_per_az ? each.key : "shared"].id
   }
 
   tags = merge(local.tags, { Name = "${local.name}-app-${local.private_app_subnets[each.key].index}-rt" })

@@ -8,6 +8,7 @@ internet_ipv4_cidr       = "0.0.0.0/0"
 public_subnet_cidrs      = ["10.20.0.0/24", "10.20.1.0/24"]
 private_app_subnet_cidrs = ["10.20.10.0/24", "10.20.11.0/24"]
 private_db_subnet_cidrs  = ["10.20.20.0/24", "10.20.21.0/24"]
+nat_gateway_per_az       = false
 
 container_image = "replace-with-your-registry.example/application:1.0.0"
 container_port  = 8080

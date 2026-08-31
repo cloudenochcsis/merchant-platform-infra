@@ -17,7 +17,7 @@ The ALB spans two public subnets. ECS tasks span two private application subnets
 
 ## Modules
 
-- `network`: VPC, two subnets per tier, internet gateway, one NAT Gateway, route tables, and RDS subnet group.
+- `network`: VPC, two subnets per tier, internet gateway, configurable shared or per-AZ NAT Gateways, route tables, and RDS subnet group.
 - `security`: separate ALB, application, and database security groups with referenced inter-tier rules.
 - `rds`: generated database password, Secrets Manager secret, and encrypted PostgreSQL RDS instance.
 - `ecs`: ALB/listeners/target group, ECS cluster, Fargate task and service, IAM roles, and retained CloudWatch log group.
@@ -132,7 +132,7 @@ The replacement updates the RDS password and secret version. The forced deployme
 - ALB and ECS span two Availability Zones. RDS Multi-AZ defaults to enabled but the dev example disables it to control cost.
 - All resources use `Project`, `Environment`, `ManagedBy`, and `Component` tags.
 
-One NAT Gateway is the deliberate cost-saving exception. Both application subnet route tables depend on the NAT in the first Availability Zone, making outbound application startup dependencies vulnerable to that AZ. A production environment should use one NAT Gateway per AZ with each private route table targeting its local gateway.
+One NAT Gateway is the deliberate dev cost-saving exception. With `nat_gateway_per_az = false`, both application subnet route tables depend on the NAT in the first Availability Zone, making outbound application startup dependencies vulnerable to that AZ. Set `nat_gateway_per_az = true` for production to create one gateway per AZ and route each private application subnet through its local gateway.
 
 ## Availability Zone Failure and Recovery
 
@@ -140,7 +140,7 @@ The ALB stops routing to unhealthy targets in a failed Availability Zone. ECS us
 
 RDS provides automatic cross-AZ failover only when `db_multi_az` is enabled. The module defaults it to true, but the dev example disables it for cost, so dev can remain unavailable during a database AZ outage until AWS service recovery or a restore. Production should enable Multi-AZ and regularly test database restore procedures.
 
-The single NAT Gateway is the main shared AZ dependency: if its Availability Zone fails, existing healthy tasks may continue serving traffic and reaching RDS, but image pulls and calls to ECR, CloudWatch Logs, and Secrets Manager can fail. Production recovery requires one NAT Gateway per AZ with local routing, or carefully selected VPC endpoints that remove those NAT dependencies.
+The dev single NAT Gateway is the main shared AZ dependency: if its Availability Zone fails, existing healthy tasks may continue serving traffic and reaching RDS, but image pulls and calls to ECR, CloudWatch Logs, and Secrets Manager can fail. Production should set `nat_gateway_per_az = true`, or use carefully selected VPC endpoints that remove those NAT dependencies.
 
 ## Cost Management
 
@@ -154,7 +154,9 @@ An operational rollback pins `container_image` to the previously approved tag or
 
 ## Environments
 
-`environments/dev` is an explicit root composition. Create `environments/staging` and `environments/prod` with the same module calls, separate variable values, separate state keys, and preferably separate AWS accounts/assume-role targets. Do not share Terraform state across environments. Production values should retain deletion protection and Multi-AZ and normally increase task count, database sizing, backup retention, and log retention.
+`environments/dev` is an explicit root composition. Add `environments/staging` and `environments/prod` as separate root modules that call the same local network, security, RDS, ECS, and observability modules; do not copy the module implementations. Each environment has its own variable values, credentials or assume-role target, and backend state key, such as `axis/staging/terraform.tfstate` or `axis/prod/terraform.tfstate`. Do not share Terraform state across environments.
+
+Production should set `nat_gateway_per_az = true` and `db_multi_az = true`, retain `db_deletion_protection = true`, and choose `desired_count`, `db_instance_class`, `db_backup_retention_days`, and `log_retention_days` for measured demand and recovery requirements. Promote reviewed immutable image references and equivalent Terraform changes between environments rather than sharing environment-specific state or values.
 
 ## Remaining Risks
 

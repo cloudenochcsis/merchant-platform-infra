@@ -8,7 +8,7 @@ flowchart TB
     subgraph VPC[VPC across two Availability Zones]
         subgraph Public[Public subnets - AZ A and AZ B]
             ALB[Application Load Balancer<br/>HTTP redirect + HTTPS listener]
-            NAT[NAT Gateway<br/>single-AZ cost trade-off]
+            NAT[NAT Gateway(s)<br/>shared in dev or one per AZ]
         end
 
         subgraph Application[Private application subnets - AZ A and AZ B]
@@ -30,4 +30,3 @@ flowchart TB
 ```
 
 Security groups enforce the three solid application traffic paths. Database subnets have no default internet route. The dotted HTTP path terminates in a redirect and does not reach the application.
-

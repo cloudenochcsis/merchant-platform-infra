@@ -1,6 +1,6 @@
 # Improvements
 
-- **One NAT Gateway per Availability Zone:** remove the single-AZ application egress dependency and avoid cross-AZ NAT traffic.
+- **Enable per-AZ NAT in production:** set `nat_gateway_per_az = true` to remove the single-AZ application egress dependency and avoid cross-AZ NAT traffic.
 - **RDS resilience based on measured demand:** retain Multi-AZ for production and add read replicas only when availability or read scaling justifies their cost.
 - **Managed DNS and edge protection:** add Route 53, ACM certificate lifecycle, HTTPS-only policy enforcement, and AWS WAF when the platform has a real domain and threat model.
 - **VPC endpoints:** use interface endpoints for ECR, CloudWatch Logs, and Secrets Manager plus an S3 gateway endpoint to reduce NAT dependence and keep AWS-service traffic private.

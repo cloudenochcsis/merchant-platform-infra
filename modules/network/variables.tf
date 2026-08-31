@@ -38,6 +38,12 @@ variable "private_db_subnet_cidrs" {
   type        = list(string)
 }
 
+variable "nat_gateway_per_az" {
+  description = "Whether to create one NAT Gateway per Availability Zone instead of one shared gateway."
+  type        = bool
+  default     = false
+}
+
 variable "common_tags" {
   description = "Tags shared by all resources."
   type        = map(string)

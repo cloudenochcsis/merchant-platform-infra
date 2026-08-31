@@ -90,6 +90,12 @@ variable "private_db_subnet_cidrs" {
   }
 }
 
+variable "nat_gateway_per_az" {
+  description = "Whether to create one NAT Gateway per Availability Zone instead of one shared gateway."
+  type        = bool
+  default     = false
+}
+
 variable "container_image" {
   description = "Immutable container image reference, including an explicit tag or digest."
   type        = string
