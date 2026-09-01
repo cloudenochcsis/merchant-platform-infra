@@ -17,7 +17,7 @@ The ALB spans two public subnets. ECS tasks span two private application subnets
 
 ![AWS production baseline across two Availability Zones](axis-aws-terraform-architecture-multi-az.png)
 
-_Illustrative production-oriented view. CIDRs are examples; the current dev values use one NAT Gateway and disable RDS Multi-AZ._
+_Illustrative production-oriented view. CIDRs are examples; the current dev values use one NAT Gateway and enable RDS Multi-AZ._
 
 ## Modules
 
@@ -165,7 +165,7 @@ The replacement updates the RDS password and secret version. The forced deployme
 - Application-to-RDS traffic is limited to TCP 5432 by security-group reference.
 - ECS tasks have no public IPs. Their HTTPS egress uses NAT for image pulls, logs, and secret retrieval.
 - RDS is private, encrypted with an AWS-managed storage key, backup-enabled, and deletion-protected by default.
-- ALB and ECS span two Availability Zones. RDS Multi-AZ defaults to enabled but the dev example disables it to control cost.
+- ALB and ECS span two Availability Zones. RDS Multi-AZ is enabled, providing a synchronous standby managed by AWS in another Availability Zone.
 - All resources use `Project`, `Environment`, `ManagedBy`, and `Component` tags.
 
 One NAT Gateway is the deliberate dev cost-saving exception. With `nat_gateway_per_az = false`, both application subnet route tables depend on the NAT in the first Availability Zone, making outbound application startup dependencies vulnerable to that AZ. Set `nat_gateway_per_az = true` for production to create one gateway per AZ and route each private application subnet through its local gateway.
@@ -174,13 +174,13 @@ One NAT Gateway is the deliberate dev cost-saving exception. With `nat_gateway_p
 
 The ALB stops routing to unhealthy targets in a failed Availability Zone. ECS uses two private application subnets, a default desired count of two, and Availability Zone rebalancing; it can replace failed tasks in the surviving zone, subject to regional Fargate capacity and working outbound access.
 
-RDS provides automatic cross-AZ failover only when `db_multi_az` is enabled. The module defaults it to true, but the dev example disables it for cost, so dev can remain unavailable during a database AZ outage until AWS service recovery or a restore. Production should enable Multi-AZ and regularly test database restore procedures.
+RDS Multi-AZ is enabled, so AWS maintains a synchronous standby and performs automatic cross-AZ failover. Existing database connections can reset during failover, and the application may be briefly unavailable while connectivity recovers. Backup restoration should still be tested because Multi-AZ is not a substitute for backups or disaster recovery.
 
 The dev single NAT Gateway is the main shared AZ dependency: if its Availability Zone fails, existing healthy tasks may continue serving traffic and reaching RDS, but image pulls and calls to ECR, CloudWatch Logs, and Secrets Manager can fail. Production should set `nat_gateway_per_az = true`, or use carefully selected VPC endpoints that remove those NAT dependencies.
 
 ## Cost Management
 
-Reduce cost first through measured right-sizing of Fargate CPU and memory, RDS instance and storage settings, backup retention, and log retention. Keep at least two production tasks so savings do not remove application AZ redundancy. After usage stabilises, evaluate Compute Savings Plans, RDS Reserved Instances, and ARM64-compatible application images. Compare NAT processing and cross-AZ charges with the fixed hourly cost of VPC endpoints; an S3 gateway endpoint is a low-cost first step, while interface endpoints should be added only where traffic and resilience justify them. Single-NAT and non-Multi-AZ settings are acceptable for dev, not production defaults.
+Reduce cost first through measured right-sizing of Fargate CPU and memory, RDS instance and storage settings, backup retention, and log retention. Keep at least two production tasks so savings do not remove application AZ redundancy. After usage stabilises, evaluate Compute Savings Plans, RDS Reserved Instances, and ARM64-compatible application images. Compare NAT processing and cross-AZ charges with the fixed hourly cost of VPC endpoints; an S3 gateway endpoint is a low-cost first step, while interface endpoints should be added only where traffic and resilience justify them. The single NAT Gateway remains a dev cost trade-off; RDS Multi-AZ is retained despite the additional standby cost.
 
 ## ECS Deployments and Rollback
 
@@ -192,11 +192,11 @@ An operational rollback pins `container_image` to the previously approved tag or
 
 `environments/dev` is an explicit root composition. Add `environments/staging` and `environments/prod` as separate root modules that call the same local network, security, RDS, ECS, and observability modules; do not copy the module implementations. Each environment has its own variable values, credentials or assume-role target, and backend state key, such as `axis/staging/terraform.tfstate` or `axis/prod/terraform.tfstate`. Do not share Terraform state across environments.
 
-Production should set `nat_gateway_per_az = true` and `db_multi_az = true`, retain `db_deletion_protection = true`, and choose `desired_count`, `db_instance_class`, `db_backup_retention_days`, and `log_retention_days` for measured demand and recovery requirements. Promote reviewed immutable image references and equivalent Terraform changes between environments rather than sharing environment-specific state or values.
+Production should set `nat_gateway_per_az = true`, retain `db_multi_az = true` and `db_deletion_protection = true`, and choose `desired_count`, `db_instance_class`, `db_backup_retention_days`, and `log_retention_days` for measured demand and recovery requirements. Promote reviewed immutable image references and equivalent Terraform changes between environments rather than sharing environment-specific state or values.
 
 ## Remaining Risks
 
-- The dev values use one NAT Gateway and disable RDS Multi-AZ; neither choice provides full AZ resilience.
+- The dev values use one NAT Gateway, leaving private application egress dependent on its Availability Zone even though RDS Multi-AZ is enabled.
 - Alarm actions default to an empty list, so alarms are created but do not notify an operator until an SNS or incident-management destination is supplied.
 - ECS has a fixed desired count and no target-tracking autoscaling policy.
 - Database credentials remain in encrypted Terraform state and rotation is a reviewed manual operation.
