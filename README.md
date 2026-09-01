@@ -15,6 +15,10 @@ Internet
 
 The ALB spans two public subnets. ECS tasks span two private application subnets and receive no public IPs. RDS uses two private database subnets with no internet route and is never publicly accessible. See [architecture.md](architecture.md) for the diagram.
 
+![AWS production baseline across two Availability Zones](axis-aws-terraform-architecture-multi-az.png)
+
+_Illustrative production-oriented view. CIDRs are examples; the current dev values use one NAT Gateway and disable RDS Multi-AZ._
+
 ## Modules
 
 - `network`: VPC, two subnets per tier, internet gateway, configurable shared or per-AZ NAT Gateways, route tables, and RDS subnet group.
