@@ -8,7 +8,7 @@ flowchart TB
     subgraph VPC[VPC across two Availability Zones]
         subgraph Public[Public subnets - AZ A and AZ B]
             ALB[Application Load Balancer<br/>HTTP redirect + HTTPS listener]
-            NAT[NAT Gateway(s)<br/>shared in dev or one per AZ]
+            NAT[NAT Gateways<br/>shared in dev or one per AZ]
         end
 
         subgraph Application[Private application subnets - AZ A and AZ B]
