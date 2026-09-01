@@ -41,6 +41,12 @@ Copy the example and replace its documentation-only image and certificate values
 cp environments/dev/terraform.tfvars.example environments/dev/terraform.tfvars
 ```
 
+### TLS certificate for deployment
+
+The ACM certificate is attached to the ALB, where HTTPS traffic is decrypted before requests are forwarded to the ECS tasks. The current port 80 listener redirects to port 443, so the placeholder `certificate_arn` is suitable only for configuration testing and must be replaced with a real certificate in the deployment Region before `terraform apply`.
+
+AWS provides a DNS name for the ALB, but does not issue customers a trusted certificate for the AWS-owned `amazonaws.com` domain. Trusted HTTPS therefore requires a certificate for a domain you control. Using the generated ALB URL over plain HTTP is technically possible only after changing the listener to forward HTTP directly; that is not implemented because it would weaken the HTTPS requirement of this baseline.
+
 ## Assumptions
 
 - DNS and certificate lifecycle are managed outside this stack. A valid ACM certificate must already exist in the target Region and be supplied through `certificate_arn`. This stack does not manage ACM certificates or Route 53 hosted zones.
