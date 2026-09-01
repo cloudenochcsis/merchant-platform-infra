@@ -20,6 +20,7 @@ override.tf.json
 # Project working files
 AGENTS.md
 docs/
+.worktrees/
 
 # Local environment and editor files
 .env
