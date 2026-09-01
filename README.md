@@ -108,7 +108,20 @@ Configure these GitHub Actions repository variables:
 
 Configure `TFVARS_DEV` as a repository secret containing the complete HCL content of a real `environments/dev/terraform.tfvars`, based on `terraform.tfvars.example`. Do not put database credentials in this secret.
 
-Before running the workflow, create GitHub's OIDC identity provider and a dedicated IAM role in AWS outside this stack. Restrict the role trust policy to this repository, and grant only the state-path, lock-table, and infrastructure permissions the dev stack requires. The workflow requests short-lived credentials with `id-token: write`; it does not use AWS access-key secrets.
+To prepare GitHub's OIDC provider and deployment role, upload `scripts/bootstrap-github-oidc.sh` to AWS CloudShell and run:
+
+```bash
+chmod +x bootstrap-github-oidc.sh
+./bootstrap-github-oidc.sh \
+  --region af-south-1 \
+  --bucket axis-tfstate-2026 \
+  --state-key axis/dev/terraform.tfstate \
+  --table axis-tflocks-dev
+```
+
+Run this once with an AWS identity permitted to manage IAM. The script creates or updates only the GitHub OIDC provider, main-branch trust role, and scoped inline deployment policy; it does not run Terraform. It prints the five repository-variable values to configure in GitHub. The workflow requests short-lived credentials with `id-token: write` and does not use AWS access-key secrets.
+
+An ACM certificate in the target Region and a deployable container image remain external inputs. They are needed only if the stack is actually planned or applied against AWS.
 
 Run the workflow from **Actions → Terraform → Run workflow**. Use `plan` first. For provisioning, run it again with `apply` and enter `apply` in the confirmation field. Nothing applies automatically after a push or merge.
 
